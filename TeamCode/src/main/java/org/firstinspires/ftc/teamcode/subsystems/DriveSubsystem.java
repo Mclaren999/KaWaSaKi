@@ -8,11 +8,9 @@ import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.Constants;
+import org.firstinspires.ftc.teamcode.PoseStorage;
 
-/**
- * Owns the complete mecanum base: Pedro manual drive, Pinpoint heading and
- * Heading PIDF. TeleOp only passes the gamepad to this subsystem.
- */
+/** Pedro manual drive, Pinpoint localization and Heading PIDF. */
 public class DriveSubsystem {
 
     private final Follower follower;
@@ -28,7 +26,7 @@ public class DriveSubsystem {
 
     public DriveSubsystem(HardwareMap hardwareMap) {
         follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
-        follower.setPose(Pose.zero());
+        follower.setPose(PoseStorage.currentPose);
         resetHeadingPid();
     }
 
@@ -50,14 +48,10 @@ public class DriveSubsystem {
                 ? Constants.Drive.TURBO_POWER
                 : Constants.Drive.NORMAL_POWER;
 
-        follower.manual(
-                forward * speed,
-                lateral * speed,
-                turn * speed
-        );
+        follower.manual(forward * speed, lateral * speed, turn * speed);
         follower.update();
-
         currentHeading = follower.pose().heading();
+        PoseStorage.currentPose = follower.pose();
     }
 
     private double getTurnPower(double manualTurn) {
@@ -66,7 +60,6 @@ public class DriveSubsystem {
             resetHeadingPid();
             return manualTurn;
         }
-
         return calculateHeadingCorrection();
     }
 
@@ -85,9 +78,8 @@ public class DriveSubsystem {
         double derivative = 0.0;
 
         if (dt > 0.0 && dt < 0.1) {
-            headingIntegral += headingError * dt;
             headingIntegral = Range.clip(
-                    headingIntegral,
+                    headingIntegral + headingError * dt,
                     -Constants.Drive.HEADING_INTEGRAL_LIMIT,
                     Constants.Drive.HEADING_INTEGRAL_LIMIT
             );
@@ -103,7 +95,6 @@ public class DriveSubsystem {
                     + Constants.Drive.HEADING_KI * headingIntegral
                     + Constants.Drive.HEADING_KD * derivative
                     + Constants.Drive.HEADING_KF * Math.signum(headingError);
-
             headingCorrection = Range.clip(
                     headingCorrection,
                     -Constants.Drive.HEADING_MAX_CORRECTION,
@@ -116,13 +107,9 @@ public class DriveSubsystem {
         return headingCorrection;
     }
 
-    private double normalizeRadians(double angle) {
-        while (angle > Math.PI) {
-            angle -= 2.0 * Math.PI;
-        }
-        while (angle < -Math.PI) {
-            angle += 2.0 * Math.PI;
-        }
+    private static double normalizeRadians(double angle) {
+        while (angle > Math.PI) angle -= 2.0 * Math.PI;
+        while (angle < -Math.PI) angle += 2.0 * Math.PI;
         return angle;
     }
 
@@ -135,15 +122,38 @@ public class DriveSubsystem {
         headingHoldActive = false;
     }
 
+    public Pose getPose() {
+        return follower.pose();
+    }
+
+    public double getFieldVelocityX() {
+        return follower.velocity().vx;
+    }
+
+    public double getFieldVelocityY() {
+        return follower.velocity().vy;
+    }
+
+    public double getAngularVelocity() {
+        return follower.velocity().omega;
+    }
+
+    public void setPose(Pose pose) {
+        follower.setPose(pose);
+        PoseStorage.currentPose = pose;
+    }
+
     public void addTelemetry(Telemetry telemetry) {
-        telemetry.addData("Heading", "%.1f deg", Math.toDegrees(currentHeading));
-        telemetry.addData("Target", "%.1f deg", Math.toDegrees(targetHeading));
-        telemetry.addData("Error", "%.2f deg", Math.toDegrees(headingError));
-        telemetry.addData("PIDF", "%.3f", headingCorrection);
+        telemetry.addData("Pose", "(%.1f, %.1f, %.1f deg)",
+                getPose().x(), getPose().y(), Math.toDegrees(currentHeading));
+        telemetry.addData("Velocity", "(%.1f, %.1f) in/s",
+                getFieldVelocityX(), getFieldVelocityY());
+        telemetry.addData("Heading target", "%.1f deg", Math.toDegrees(targetHeading));
     }
 
     public void stop() {
         follower.manual(0.0, 0.0, 0.0);
         follower.update();
+        PoseStorage.currentPose = follower.pose();
     }
 }

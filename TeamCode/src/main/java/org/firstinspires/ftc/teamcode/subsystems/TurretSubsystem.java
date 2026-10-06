@@ -6,23 +6,17 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.Range;
 
-/**
- * Controls the single geared motor that turns both turrets.
- * The two turrets are mechanically synchronized, so only one motor is mapped.
- */
+import org.firstinspires.ftc.teamcode.Constants;
+
+/** One geared motor mechanically turns both turrets. */
 public class TurretSubsystem {
 
-    public static final String MOTOR_NAME = "turret";
-
-    public static double MAX_POWER = 0.35;
-    public static int MIN_TICKS = -900;
-    public static int MAX_TICKS = 900;
-    public static double STICK_DEADZONE = 0.08;
-
     private final DcMotorEx motor;
+    private double targetAngleRadians;
+    private double angleErrorRadians;
 
     public TurretSubsystem(HardwareMap hardwareMap) {
-        motor = hardwareMap.get(DcMotorEx.class, MOTOR_NAME);
+        motor = hardwareMap.get(DcMotorEx.class, Constants.Turret.MOTOR_NAME);
         motor.setDirection(DcMotorSimple.Direction.FORWARD);
         motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
@@ -32,18 +26,53 @@ public class TurretSubsystem {
         stop();
     }
 
+    public void aimAt(double robotRelativeAngleRadians) {
+        targetAngleRadians = normalizeRadians(
+                robotRelativeAngleRadians - Constants.Turret.ZERO_OFFSET_RADIANS
+        );
+
+        int targetTicks = (int) Math.round(
+                targetAngleRadians * Constants.Turret.TICKS_PER_RADIAN
+        );
+        targetTicks = Range.clip(
+                targetTicks,
+                Constants.Turret.MIN_TICKS,
+                Constants.Turret.MAX_TICKS
+        );
+
+        int errorTicks = targetTicks - motor.getCurrentPosition();
+        angleErrorRadians = errorTicks / Constants.Turret.TICKS_PER_RADIAN;
+        double power = Range.clip(
+                errorTicks * Constants.Turret.AIM_KP,
+                -Constants.Turret.MAX_POWER,
+                Constants.Turret.MAX_POWER
+        );
+        motor.setPower(power);
+    }
+
     public void manual(double stickX) {
-        double power = Math.abs(stickX) > STICK_DEADZONE
-                ? Range.clip(stickX, -1.0, 1.0) * MAX_POWER
+        double power = Math.abs(stickX) > Constants.Turret.STICK_DEADZONE
+                ? Range.clip(stickX, -1.0, 1.0) * Constants.Turret.MAX_POWER
                 : 0.0;
 
         int position = motor.getCurrentPosition();
-        if ((position >= MAX_TICKS && power > 0.0)
-                || (position <= MIN_TICKS && power < 0.0)) {
+        if ((position >= Constants.Turret.MAX_TICKS && power > 0.0)
+                || (position <= Constants.Turret.MIN_TICKS && power < 0.0)) {
             power = 0.0;
         }
-
         motor.setPower(power);
+    }
+
+    public boolean isAimed() {
+        return Math.abs(angleErrorRadians) <= Constants.Turret.AIM_TOLERANCE_RADIANS;
+    }
+
+    public double getTargetAngleRadians() {
+        return targetAngleRadians;
+    }
+
+    public double getAngleErrorRadians() {
+        return angleErrorRadians;
     }
 
     public int getPosition() {
@@ -52,5 +81,11 @@ public class TurretSubsystem {
 
     public void stop() {
         motor.setPower(0.0);
+    }
+
+    private static double normalizeRadians(double angle) {
+        while (angle > Math.PI) angle -= 2.0 * Math.PI;
+        while (angle < -Math.PI) angle += 2.0 * Math.PI;
+        return angle;
     }
 }
