@@ -67,16 +67,16 @@ public final class BioBuzzTargeting {
         double cos = Math.cos(robotPose.heading());
         double sin = Math.sin(robotPose.heading());
         double offsetX =
-                Constants.BioBuzz.SHOOTER_OFFSET_FORWARD * cos
-                - Constants.BioBuzz.SHOOTER_OFFSET_LEFT * sin;
+                Constants.BioBuzz.TURRET_AXIS_OFFSET_FORWARD * cos
+                - Constants.BioBuzz.TURRET_AXIS_OFFSET_LEFT * sin;
         double offsetY =
-                Constants.BioBuzz.SHOOTER_OFFSET_FORWARD * sin
-                + Constants.BioBuzz.SHOOTER_OFFSET_LEFT * cos;
+                Constants.BioBuzz.TURRET_AXIS_OFFSET_FORWARD * sin
+                + Constants.BioBuzz.TURRET_AXIS_OFFSET_LEFT * cos;
 
         double shooterX = robotPose.x() + offsetX;
         double shooterY = robotPose.y() + offsetY;
 
-        // A projectile inherits both robot translation and velocity from rotation.
+        // The ball inherits translation plus tangential velocity from rotation.
         double shooterVelocityX = robotVelocityX - robotAngularVelocity * offsetY;
         double shooterVelocityY = robotVelocityY + robotAngularVelocity * offsetX;
 
@@ -92,7 +92,6 @@ public final class BioBuzzTargeting {
         double aimY = targetY - shooterY;
         double distance = Math.hypot(aimX, aimY);
 
-        // Recalculate because flight time depends on the led distance.
         for (int i = 0; i < 3; i++) {
             flightTime = delay + distance * secondsPerInch;
             aimX = targetX - (shooterX + shooterVelocityX * flightTime);
