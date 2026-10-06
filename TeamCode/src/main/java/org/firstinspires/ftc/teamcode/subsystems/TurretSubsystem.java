@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.Constants;
 
-/** One geared motor mechanically turns both turrets. */
+/** One geared motor automatically turns both linked turrets. */
 public class TurretSubsystem {
 
     private final DcMotorEx motor;
@@ -20,47 +20,31 @@ public class TurretSubsystem {
         motor.setDirection(DcMotorSimple.Direction.FORWARD);
         motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Both turrets must be mechanically centered before INIT.
+        // Mechanically point the turrets at their zero direction before INIT.
         motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         stop();
     }
 
     public void aimAt(double robotRelativeAngleRadians) {
-        targetAngleRadians = normalizeRadians(
-                robotRelativeAngleRadians - Constants.Turret.ZERO_OFFSET_RADIANS
+        targetAngleRadians = Range.clip(
+                normalizeRadians(robotRelativeAngleRadians
+                        - Constants.Turret.ZERO_OFFSET_RADIANS),
+                Constants.Turret.MIN_ANGLE_RADIANS,
+                Constants.Turret.MAX_ANGLE_RADIANS
         );
 
         int targetTicks = (int) Math.round(
                 targetAngleRadians * Constants.Turret.TICKS_PER_RADIAN
         );
-        targetTicks = Range.clip(
-                targetTicks,
-                Constants.Turret.MIN_TICKS,
-                Constants.Turret.MAX_TICKS
-        );
-
         int errorTicks = targetTicks - motor.getCurrentPosition();
         angleErrorRadians = errorTicks / Constants.Turret.TICKS_PER_RADIAN;
-        double power = Range.clip(
+
+        motor.setPower(Range.clip(
                 errorTicks * Constants.Turret.AIM_KP,
                 -Constants.Turret.MAX_POWER,
                 Constants.Turret.MAX_POWER
-        );
-        motor.setPower(power);
-    }
-
-    public void manual(double stickX) {
-        double power = Math.abs(stickX) > Constants.Turret.STICK_DEADZONE
-                ? Range.clip(stickX, -1.0, 1.0) * Constants.Turret.MAX_POWER
-                : 0.0;
-
-        int position = motor.getCurrentPosition();
-        if ((position >= Constants.Turret.MAX_TICKS && power > 0.0)
-                || (position <= Constants.Turret.MIN_TICKS && power < 0.0)) {
-            power = 0.0;
-        }
-        motor.setPower(power);
+        ));
     }
 
     public boolean isAimed() {
