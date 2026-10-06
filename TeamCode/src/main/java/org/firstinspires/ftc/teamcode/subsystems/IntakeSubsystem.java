@@ -3,11 +3,12 @@ package org.firstinspires.ftc.teamcode.subsystems;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
-/** Controls the intake motor and the movable intake ramp. */
+/** Intake and ramp controls for the single driver. */
 public class IntakeSubsystem {
 
     public static final String MOTOR_NAME = "intake";
@@ -32,6 +33,19 @@ public class IntakeSubsystem {
 
         stop();
         raiseRamp();
+    }
+
+    public void control(Gamepad gamepad) {
+        if (gamepad.left_bumper) {
+            reverse(1.0);
+        } else if (gamepad.left_trigger > 0.05) {
+            intake(gamepad.left_trigger);
+        } else {
+            stop();
+        }
+
+        if (gamepad.a) lowerRamp();
+        if (gamepad.b) raiseRamp();
     }
 
     public void intake(double trigger) {
