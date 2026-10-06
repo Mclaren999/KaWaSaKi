@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.Constants;
 
-/** Independent NECTAR and POLLEN flywheels and release gates. */
+/** Both BIOBUZZ flywheels run together and both gates release together. */
 public class ShooterSubsystem {
 
     public enum ShotType {
@@ -31,8 +31,8 @@ public class ShooterSubsystem {
     private final Servo bigGate;
     private final Servo smallGate;
 
-    private ShotType activeType = ShotType.POLLEN;
-    private double targetVelocity;
+    private double pollenTargetVelocity;
+    private double nectarTargetVelocity;
 
     public ShooterSubsystem(HardwareMap hardwareMap) {
         bigShooter = hardwareMap.get(DcMotorEx.class, BIG_MOTOR_NAME);
@@ -43,7 +43,6 @@ public class ShooterSubsystem {
         configure(bigShooter);
         configure(smallShooter);
         stop();
-        closeGates();
     }
 
     private static void configure(DcMotorEx motor) {
@@ -52,53 +51,46 @@ public class ShooterSubsystem {
         motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
     }
 
-    public void spin(ShotType type, double ticksPerSecond) {
-        activeType = type;
-        targetVelocity = ticksPerSecond;
-
-        if (type == ShotType.NECTAR) {
-            bigShooter.setVelocity(ticksPerSecond);
-            smallShooter.setPower(0.0);
-        } else {
-            smallShooter.setVelocity(ticksPerSecond);
-            bigShooter.setPower(0.0);
-        }
+    public void spinBoth(double pollenTicksPerSecond, double nectarTicksPerSecond) {
+        pollenTargetVelocity = pollenTicksPerSecond;
+        nectarTargetVelocity = nectarTicksPerSecond;
+        smallShooter.setVelocity(pollenTicksPerSecond);
+        bigShooter.setVelocity(nectarTicksPerSecond);
     }
 
-    public boolean isAtSpeed() {
-        return Math.abs(getVelocity() - targetVelocity)
-                <= Constants.BioBuzz.SHOOTER_READY_TOLERANCE;
+    public boolean areBothAtSpeed() {
+        return Math.abs(getPollenVelocity() - pollenTargetVelocity)
+                        <= Constants.BioBuzz.SHOOTER_READY_TOLERANCE
+                && Math.abs(getNectarVelocity() - nectarTargetVelocity)
+                        <= Constants.BioBuzz.SHOOTER_READY_TOLERANCE;
     }
 
-    public double getVelocity() {
-        return activeType == ShotType.NECTAR
-                ? bigShooter.getVelocity()
-                : smallShooter.getVelocity();
+    public void setBothGatesOpen(boolean open) {
+        bigGate.setPosition(open ? BIG_GATE_OPEN : BIG_GATE_CLOSED);
+        smallGate.setPosition(open ? SMALL_GATE_OPEN : SMALL_GATE_CLOSED);
     }
 
-    public double getTargetVelocity() {
-        return targetVelocity;
+    public double getPollenVelocity() {
+        return smallShooter.getVelocity();
     }
 
-    public void setGateOpen(boolean open) {
-        if (activeType == ShotType.NECTAR) {
-            bigGate.setPosition(open ? BIG_GATE_OPEN : BIG_GATE_CLOSED);
-            smallGate.setPosition(SMALL_GATE_CLOSED);
-        } else {
-            smallGate.setPosition(open ? SMALL_GATE_OPEN : SMALL_GATE_CLOSED);
-            bigGate.setPosition(BIG_GATE_CLOSED);
-        }
+    public double getNectarVelocity() {
+        return bigShooter.getVelocity();
     }
 
-    public void closeGates() {
-        bigGate.setPosition(BIG_GATE_CLOSED);
-        smallGate.setPosition(SMALL_GATE_CLOSED);
+    public double getPollenTargetVelocity() {
+        return pollenTargetVelocity;
+    }
+
+    public double getNectarTargetVelocity() {
+        return nectarTargetVelocity;
     }
 
     public void stop() {
         bigShooter.setPower(0.0);
         smallShooter.setPower(0.0);
-        targetVelocity = 0.0;
-        closeGates();
+        pollenTargetVelocity = 0.0;
+        nectarTargetVelocity = 0.0;
+        setBothGatesOpen(false);
     }
 }
