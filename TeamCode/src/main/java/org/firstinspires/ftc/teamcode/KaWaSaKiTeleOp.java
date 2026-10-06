@@ -144,7 +144,7 @@ public class KaWaSaKiTeleOp extends OpMode {
             return 0.0;
         }
 
-        headingError = normalizeRadians(targetHeading - currentHeading);
+        headingError = normalizeRadians(currentHeading - targetHeading);
         double dt = (now - previousPidTimeNanos) / 1_000_000_000.0;
 
         double derivative = 0.0;
