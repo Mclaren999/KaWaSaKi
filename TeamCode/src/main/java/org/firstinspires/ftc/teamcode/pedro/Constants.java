@@ -1,11 +1,106 @@
 package org.firstinspires.ftc.teamcode.pedro;
 
+import com.pedropathing.algorithm.Foresight;
+import com.pedropathing.algorithm.ForesightConfig;
+import com.pedropathing.controllers.Controller;
 import com.pedropathing.follower.Follower;
+import com.pedropathing.math.Matrix;
+import com.pedropathing.math.Vector2D;
+import com.pedropathing.revhub.drivetrains.Mecanum;
+import com.pedropathing.revhub.drivetrains.MecanumConfig;
+import com.pedropathing.revhub.localizers.PinpointConfig;
+import com.pedropathing.revhub.localizers.PinpointLocalizer;
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-public class Constants {
-    public static Follower create(HardwareMap h) {
-        // return new Follower(Drivetrain, Localizer, Foresight);
-        return null;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+
+/**
+ * Pedro Pathing 3 setup for the KaWaSaKi mecanum robot.
+ *
+ * Motor names and directions are ready to use. Pinpoint offsets and all
+ * Foresight values are starter values and must be replaced with AutoTune output.
+ */
+public final class Constants {
+
+    private Constants() {
+    }
+
+    public static final MecanumConfig drivetrainConfig = new MecanumConfig(c -> {
+        c.frontLeftName.set("leftFront");
+        c.backLeftName.set("leftRear");
+        c.frontRightName.set("rightFront");
+        c.backRightName.set("rightRear");
+
+        c.frontLeftDirection.set(DcMotorSimple.Direction.REVERSE);
+        c.backLeftDirection.set(DcMotorSimple.Direction.REVERSE);
+        c.frontRightDirection.set(DcMotorSimple.Direction.FORWARD);
+        c.backRightDirection.set(DcMotorSimple.Direction.FORWARD);
+
+        c.manualBrakeMode.set(true);
+    });
+
+    public static final PinpointConfig localizerConfig = new PinpointConfig(c -> {
+        c.name.set("pinpoint");
+        c.podType.set(
+                GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD
+        );
+
+        // Temporary until Pinpoint AutoTune calculates the real offsets.
+        c.xPodOffset.set(0.0);
+        c.yPodOffset.set(0.0);
+
+        c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.globalDistanceUnit.set(DistanceUnit.INCH);
+        c.offsetUnits.set(DistanceUnit.INCH);
+    });
+
+    /*
+     * Starter values only. Run Foresight AutoTune and replace this complete
+     * block with the Java configuration generated for the real robot.
+     */
+    public static final ForesightConfig foresightConfig = new ForesightConfig(c -> {
+        Controller primaryForward = Controller.proportional(0.30);
+        Controller secondaryForward = Controller.proportional(0.10);
+        Controller primaryLateral = Controller.proportional(0.30);
+        Controller secondaryLateral = Controller.proportional(0.10);
+
+        c.forwardTranslational.set(
+                Controller.piecewise(secondaryForward)
+                        .put(2.5, primaryForward)
+        );
+        c.strafeTranslational.set(
+                Controller.piecewise(secondaryLateral)
+                        .put(2.5, primaryLateral)
+        );
+
+        c.coast.set(Controller.proportionalFeedforward(0.010978350889324107));
+        c.brake.set(Controller.proportionalFeedforward(0.008731598255925491));
+        c.headingFeedback.set(Controller.proportional(5.258721785960744));
+        c.headingBrakeCoefficients.set(
+                Vector2D.cartesian(0.05642143125655298, 0.0063829525363003695)
+        );
+
+        c.linearBrakeCoefficients.set(
+                Matrix.diag(0.10605894992901523, 0.08719146175596092)
+        );
+        c.quadraticBrakeCoefficients.set(
+                Matrix.diag(0.0014663966976606565, 0.0013837064502458813)
+        );
+
+        c.maxAchievableForwardVelocity.set(72.72923108818539);
+        c.maxAchievableStrafeVelocity.set(52.34323936525474);
+        c.naturalForwardDeceleration.set(85.01144677379789);
+        c.naturalStrafeDeceleration.set(104.49787535782846);
+    });
+
+    public static Follower create(HardwareMap hardwareMap) {
+        return new Follower(
+                new PinpointLocalizer(hardwareMap, localizerConfig),
+                new Mecanum(hardwareMap, drivetrainConfig),
+                new Foresight(foresightConfig)
+        );
     }
 }
