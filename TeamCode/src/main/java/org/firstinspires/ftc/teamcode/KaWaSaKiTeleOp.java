@@ -1,38 +1,66 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.util.Range;
 
-import org.firstinspires.ftc.teamcode.subsystems.IntakeSubsystem;
-import org.firstinspires.ftc.teamcode.subsystems.ShooterSubsystem;
-import org.firstinspires.ftc.teamcode.subsystems.TurretSubsystem;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
-/** Main driver-controlled program. Mechanism logic lives in separate subsystems. */
-@TeleOp(name = "KaWaSaKi Dual Ball", group = "Main")
+/**
+ * Clean TeleOp for the mecanum base only.
+ *
+ * Pinpoint supplies the heading. When the driver releases the right stick,
+ * Heading PIDF holds the angle at which the stick was released.
+ */
+@TeleOp(name = "KaWaSaKi Base", group = "Main")
 public class KaWaSaKiTeleOp extends OpMode {
 
     private DcMotorEx leftFront;
     private DcMotorEx rightFront;
     private DcMotorEx leftRear;
     private DcMotorEx rightRear;
+    private GoBildaPinpointDriver pinpoint;
 
-    private IntakeSubsystem intake;
-    private ShooterSubsystem shooter;
-    private TurretSubsystem turret;
+    private double targetHeading;
+    private double currentHeading;
+    private double headingError;
+    private double headingCorrection;
+    private double headingIntegral;
+    private double previousHeadingError;
+    private long previousPidTimeNanos;
+    private boolean headingHoldActive;
 
     @Override
     public void init() {
         initDrive();
 
-        intake = new IntakeSubsystem(hardwareMap);
-        shooter = new ShooterSubsystem(hardwareMap);
-        turret = new TurretSubsystem(hardwareMap);
+        pinpoint = hardwareMap.get(
+                GoBildaPinpointDriver.class,
+                Constants.Drive.PINPOINT_NAME
+        );
 
-        telemetry.addLine("KaWaSaKi ready");
-        telemetry.addLine("Center both turrets before INIT");
+        // Keep the robot stationary during INIT while Pinpoint resets its pose and IMU.
+        pinpoint.resetPosAndIMU();
+        pinpoint.update();
+
+        currentHeading = readHeadingRadians();
+        targetHeading = currentHeading;
+        resetHeadingPid();
+
+        telemetry.addLine("KaWaSaKi base ready");
+        telemetry.addLine("Heading source: Pinpoint");
         telemetry.update();
+    }
+
+    @Override
+    public void start() {
+        pinpoint.update();
+        currentHeading = readHeadingRadians();
+        targetHeading = currentHeading;
+        resetHeadingPid();
     }
 
     private void initDrive() {
@@ -60,27 +88,32 @@ public class KaWaSaKiTeleOp extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.back || gamepad2.back) {
-            stopEverything();
-            telemetry.addLine("EMERGENCY STOP (hold BACK)");
-            telemetry.update();
-            return;
-        }
-
         drive();
-        controlIntake();
-        controlShooter();
-        controlTurret();
 
-        telemetry.addData("Turret", "%d ticks", turret.getPosition());
-        telemetry.addData("Ramp", intake.isRampDown() ? "DOWN" : "UP");
+        telemetry.addData("Heading", "%.1f deg", Math.toDegrees(currentHeading));
+        telemetry.addData("Target", "%.1f deg", Math.toDegrees(targetHeading));
+        telemetry.addData("Error", "%.2f deg", Math.toDegrees(headingError));
+        telemetry.addData("PIDF correction", "%.3f", headingCorrection);
         telemetry.update();
     }
 
     private void drive() {
+        pinpoint.update();
+        currentHeading = readHeadingRadians();
+
         double forward = -gamepad1.left_stick_y;
         double strafe = gamepad1.left_stick_x * Constants.Drive.STRAFE_MULTIPLIER;
-        double turn = gamepad1.right_stick_x;
+        double manualTurn = gamepad1.right_stick_x;
+
+        double turn;
+        if (Math.abs(manualTurn) > Constants.Drive.TURN_STICK_DEADZONE) {
+            // Driver is turning: do not fight the stick. Continuously move the target.
+            targetHeading = currentHeading;
+            resetHeadingPid();
+            turn = manualTurn;
+        } else {
+            turn = calculateHeadingCorrection();
+        }
 
         double denominator = Math.max(
                 Math.abs(forward) + Math.abs(strafe) + Math.abs(turn),
@@ -96,31 +129,78 @@ public class KaWaSaKiTeleOp extends OpMode {
         rightRear.setPower((forward + strafe - turn) / denominator * speed);
     }
 
-    private void controlIntake() {
-        if (gamepad2.right_trigger > 0.15) {
-            intake.intake(gamepad2.right_trigger);
-        } else if (gamepad2.left_trigger > 0.15) {
-            intake.reverse(gamepad2.left_trigger);
+    private double calculateHeadingCorrection() {
+        long now = System.nanoTime();
+
+        // The first loop after manual turning only captures the new target cleanly.
+        if (!headingHoldActive) {
+            targetHeading = currentHeading;
+            previousPidTimeNanos = now;
+            previousHeadingError = 0.0;
+            headingIntegral = 0.0;
+            headingError = 0.0;
+            headingCorrection = 0.0;
+            headingHoldActive = true;
+            return 0.0;
+        }
+
+        headingError = normalizeRadians(targetHeading - currentHeading);
+        double dt = (now - previousPidTimeNanos) / 1_000_000_000.0;
+
+        double derivative = 0.0;
+        if (dt > 0.0 && dt < 0.1) {
+            headingIntegral += headingError * dt;
+            headingIntegral = Range.clip(
+                    headingIntegral,
+                    -Constants.Drive.HEADING_INTEGRAL_LIMIT,
+                    Constants.Drive.HEADING_INTEGRAL_LIMIT
+            );
+            derivative = (headingError - previousHeadingError) / dt;
+        }
+
+        if (Math.abs(headingError) <= Constants.Drive.HEADING_TOLERANCE_RADIANS) {
+            headingIntegral = 0.0;
+            headingCorrection = 0.0;
         } else {
-            intake.stop();
+            headingCorrection =
+                    Constants.Drive.HEADING_KP * headingError
+                    + Constants.Drive.HEADING_KI * headingIntegral
+                    + Constants.Drive.HEADING_KD * derivative
+                    + Constants.Drive.HEADING_KF * Math.signum(headingError);
+
+            headingCorrection = Range.clip(
+                    headingCorrection,
+                    -Constants.Drive.HEADING_MAX_CORRECTION,
+                    Constants.Drive.HEADING_MAX_CORRECTION
+            );
         }
 
-        if (gamepad2.dpad_down) {
-            intake.lowerRamp();
-        } else if (gamepad2.dpad_up) {
-            intake.raiseRamp();
+        previousHeadingError = headingError;
+        previousPidTimeNanos = now;
+        return headingCorrection;
+    }
+
+    private double readHeadingRadians() {
+        return pinpoint.getPosition().getHeading(AngleUnit.RADIANS);
+    }
+
+    private double normalizeRadians(double angle) {
+        while (angle > Math.PI) {
+            angle -= 2.0 * Math.PI;
         }
+        while (angle < -Math.PI) {
+            angle += 2.0 * Math.PI;
+        }
+        return angle;
     }
 
-    private void controlShooter() {
-        shooter.setBigShooter(gamepad2.right_bumper);
-        shooter.setSmallShooter(gamepad2.left_bumper);
-        shooter.setBigGateOpen(gamepad2.a);
-        shooter.setSmallGateOpen(gamepad2.b);
-    }
-
-    private void controlTurret() {
-        turret.manual(gamepad2.right_stick_x);
+    private void resetHeadingPid() {
+        headingIntegral = 0.0;
+        previousHeadingError = 0.0;
+        headingError = 0.0;
+        headingCorrection = 0.0;
+        previousPidTimeNanos = System.nanoTime();
+        headingHoldActive = false;
     }
 
     private void stopDrive() {
@@ -130,17 +210,8 @@ public class KaWaSaKiTeleOp extends OpMode {
         rightRear.setPower(0.0);
     }
 
-    private void stopEverything() {
-        stopDrive();
-        intake.stop();
-        shooter.stop();
-        shooter.closeGates();
-        turret.stop();
-    }
-
     @Override
     public void stop() {
-        stopEverything();
-        intake.raiseRamp();
+        stopDrive();
     }
 }
