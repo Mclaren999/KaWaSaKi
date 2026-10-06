@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.Constants;
+import org.firstinspires.ftc.teamcode.PoseStorage;
 
 /** Pedro manual drive, Pinpoint localization and Heading PIDF. */
 public class DriveSubsystem {
@@ -25,7 +26,7 @@ public class DriveSubsystem {
 
     public DriveSubsystem(HardwareMap hardwareMap) {
         follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
-        follower.setPose(Pose.zero());
+        follower.setPose(PoseStorage.currentPose);
         resetHeadingPid();
     }
 
@@ -50,6 +51,7 @@ public class DriveSubsystem {
         follower.manual(forward * speed, lateral * speed, turn * speed);
         follower.update();
         currentHeading = follower.pose().heading();
+        PoseStorage.currentPose = follower.pose();
     }
 
     private double getTurnPower(double manualTurn) {
@@ -136,6 +138,11 @@ public class DriveSubsystem {
         return follower.velocity().omega;
     }
 
+    public void setPose(Pose pose) {
+        follower.setPose(pose);
+        PoseStorage.currentPose = pose;
+    }
+
     public void addTelemetry(Telemetry telemetry) {
         telemetry.addData("Pose", "(%.1f, %.1f, %.1f deg)",
                 getPose().x(), getPose().y(), Math.toDegrees(currentHeading));
@@ -147,5 +154,6 @@ public class DriveSubsystem {
     public void stop() {
         follower.manual(0.0, 0.0, 0.0);
         follower.update();
+        PoseStorage.currentPose = follower.pose();
     }
 }
