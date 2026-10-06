@@ -44,7 +44,7 @@ public class DriveSubsystem {
         double lateral = gamepad.left_stick_x * Constants.Drive.STRAFE_MULTIPLIER;
         double manualTurn = gamepad.right_stick_x;
         double turn = getTurnPower(manualTurn);
-        double speed = gamepad.right_trigger > 0.25
+        double speed = gamepad.right_bumper
                 ? Constants.Drive.TURBO_POWER
                 : Constants.Drive.NORMAL_POWER;
 
@@ -105,6 +105,17 @@ public class DriveSubsystem {
         previousHeadingError = headingError;
         previousPidTimeNanos = now;
         return headingCorrection;
+    }
+
+    public void resetPoseAtReferencePoint() {
+        setPose(new Pose(
+                Constants.Drive.R3_RESET_X,
+                Constants.Drive.R3_RESET_Y,
+                Constants.Drive.R3_RESET_HEADING_RADIANS
+        ));
+        currentHeading = follower.pose().heading();
+        targetHeading = currentHeading;
+        resetHeadingPid();
     }
 
     private static double normalizeRadians(double angle) {
