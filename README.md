@@ -1,3 +1,82 @@
+# KaWaSaKi — FTC Team 21094
+
+Java robot-control code for **FTC Team 21094 (SWB), Astana, Kazakhstan**, for the **2026–27 BIOBUZZ season**. The project builds on the [Pedro Pathing Quickstart](https://github.com/Pedro-Pathing/Quickstart) and the FIRST Tech Challenge SDK.
+
+## Team and results
+
+On **17 October 2026**, Team 21094 was **#1 on FTC-Reference's worldwide 2026–27 Auto OPR leaderboard**, with an Auto OPR of **26.7**. The team had one event with recorded statistics in that season at the time of the check.
+
+[Auto OPR leaderboard](https://ftc-reference.com/seasons/2026/leaders?sort=auto) · [Team statistics](https://ftc-reference.com/teams/21094?season=2026) · [Official FIRST team profile](https://ftc-events.firstinspires.org/team/21094)
+
+Auto OPR is a statistical estimate of autonomous points contributed per match. This is a dated ranking on an independent statistics site, not a World Championship title. The ranking describes the team's results; it does not establish that the current version of this repository was used in those matches. FIRST lists the team as SWB this season and North Star in 2025–26.
+
+## What is in the code
+
+The team-specific entry point is [KaWaSaKiTeleOp.java](TeamCode/src/main/java/org/firstinspires/ftc/teamcode/KaWaSaKiTeleOp.java). It connects:
+
+- **DriveSubsystem:** Pedro manual mecanum drive, Pinpoint localization, heading hold, and a reference-pose reset.
+- **IntakeSubsystem:** proportional intake, reverse, and ramp controls.
+- **BioBuzzTargeting:** target geometry and a moving-shot lead estimate using robot translation, rotation, and turret offset.
+- **BioBuzzScoringSubsystem:** a shared aiming angle for mechanically linked turrets and release gating based on turret alignment and both flywheel speeds.
+- **ShooterSubsystem / TurretSubsystem:** encoder-based flywheel velocity commands and turret aiming.
+- **PoseStorage:** an in-memory pose that can be shared between OpModes while the Robot Controller process remains alive.
+- **Pedro tuning procedures:** drivetrain, Pinpoint, Foresight, and diagnostic procedures.
+
+The entry point is annotated `@TeleOp`, even though its Driver Station name contains "Auto". Automatic aiming runs during driver control. This snapshot does not include a team-specific autonomous match routine.
+
+## Start here
+
+1. Clone this repository and open it in Android Studio.
+2. Follow the [hardware configuration and setup guide](doc/TEAM_SETUP.md).
+3. Read the [targeting algorithm and adaptation notes](doc/TARGETING.md).
+4. Calibrate on your own robot before using the scoring mechanisms.
+
+The repository declares FTC SDK **12.0.0**, Pedro `revhub:3.0.1`, and Pedro `tuning:1.0.1`. The upstream SDK README below specifies Android Studio Narwhal 3 Feature Drop or later.
+
+**Status:** robot-specific development code. Pinpoint offsets and Foresight configuration are explicitly marked as starter values in the source. Field coordinates, flight-time estimates, shooter velocities, turret calibration, and servo endpoints also need measurement. This documentation is based on source inspection; it is not a report of a successful build or hardware test.
+
+## Driver controls
+
+| Input | Action |
+| --- | --- |
+| Left stick | Forward/backward and lateral drive |
+| Right stick X | Manual turn; heading hold engages when the stick is released |
+| Right bumper | Turbo drive |
+| Right stick button (R3), pressed once | Assign the configured reference pose |
+| Left trigger | Proportional intake |
+| Left bumper | Reverse intake; takes priority over the left trigger |
+| A / B | Lower / raise the ramp |
+| Right trigger > 0.5 | Request release; gates open only when the scoring subsystem reports ready |
+
+Target alliance and target cell are configured in code before the OpMode is initialized. They are not selected from the gamepad.
+
+## Reusing this work
+
+Other FTC teams can study the subsystem layout, heading-hold logic, and the targeting calculation. For another robot, start with the geometry calculation and replace the hardware names and calibration values. This is a robot project, not a published standalone library; no downstream adoption or download figures are claimed.
+
+We welcome issues with reproduction steps, units, relevant telemetry, and hardware details. For changes to robot behavior, include the intended behavior and how you checked it. Keep changes to the FIRST SDK and inherited Pedro tuning code separate from team-specific changes.
+
+### Next documentation and development goals
+
+- Add numerical checks for targeting edge cases and record calibration measurements.
+- Publish a robot demonstration and measured aiming results.
+- Document autonomous routines when they are added.
+- Add adaptation examples based on feedback from other teams.
+
+These are planned tasks, not completed features or evidence of current adoption.
+
+## Credits and license
+
+This repository was created from [Pedro-Pathing/Quickstart](https://github.com/Pedro-Pathing/Quickstart), which builds on the [FIRST FTC Robot Controller project](https://github.com/FIRST-Tech-Challenge/FtcRobotController). The SDK, samples, and inherited tuning procedures remain credited to their upstream authors. Team-specific code is under `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`; the `pedro/procedures/` directory includes upstream tuning infrastructure.
+
+See [LICENSE](LICENSE) and the notices in individual files. The existing license and copyright notices have been retained.
+
+---
+
+# Upstream FTC SDK documentation
+
+The original FTC SDK README is preserved below for setup information and release history.
+
 ## NOTICE
 
 This repository contains the public FTC SDK for the BIOBUZZ (2026-2027) competition season.
